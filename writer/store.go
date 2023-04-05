@@ -13,19 +13,12 @@ type IStore interface {
 	Insert(*DataPoint) error
 }
 
-type DevnullStore struct{}
-
 type CassandraStore struct {
 	session             *gocql.Session
 	cluster             *gocql.ClusterConfig
 	resolutionInSeconds int64
 	retentionInSeconds  int64
 	query               string
-}
-
-func (s *DevnullStore) Insert(datapoint *DataPoint) error {
-	log.Debug("store:/dev/null: ", datapoint)
-	return nil
 }
 
 func (s *CassandraStore) Insert(datapoint *DataPoint) error {
@@ -82,6 +75,6 @@ func NewStore(config *StoreConfig) (IStore, error) {
 	case "cassandra":
 		return NewCassandraStore(config)
 	default:
-		return &DevnullStore{}, nil
+		return &DevNull{}, nil
 	}
 }
