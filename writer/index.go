@@ -1,10 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -51,13 +50,14 @@ func (idx *Index) Index(datapoint *DataPoint) error {
 }
 
 func (idx *Index) add(doc *PathDoc) {
-	jdoc, _ := json.Marshal(doc)
+	jdoc := fmt.Sprintf(`{"depth": %d, "leaf": %t, "path": "%s"}`, doc.depth, doc.leaf, doc.path)
+
 	err := idx.bulkIndexer.Add(
 		context.Background(),
 		opensearchutil.BulkIndexerItem{
 			Action:     "index",
 			DocumentID: doc.path,
-			Body:       bytes.NewReader(jdoc),
+			Body:       strings.NewReader(jdoc),
 			OnFailure: func(
 				ctx context.Context,
 				item opensearchutil.BulkIndexerItem,

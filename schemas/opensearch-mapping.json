@@ -1,0 +1,10 @@
+{ 
+    "mappings" : { 
+        "properties" : { 
+            "depth" : { "type" : "long" }, 
+            "leaf" : { "type" : "boolean" }, 
+            "path" : { "type" : "text", "index" : true }, 
+            "origin" : { "type" : "text", "index" : false } 
+        } 
+    }
+}
