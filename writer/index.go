@@ -36,13 +36,6 @@ type PathDoc struct {
 	depth int
 }
 
-type DevnullIndex struct{}
-
-func (i *DevnullIndex) Index(datapoint *DataPoint) error {
-	log.Debug("index:/dev/null: ", datapoint)
-	return nil
-}
-
 func (idx *OpensearchIndex) Index(datapoint *DataPoint) error {
 	segments := strings.Split(datapoint.Metric, ".")
 	if cached, err := idx.cache.Get(datapoint.Metric); len(cached) > 0 || err == nil {
@@ -164,6 +157,6 @@ func NewIndex(config *IndexConfig) (IIndex, error) {
 	case "opensearch":
 		return NewOpensearchIndex(config)
 	default:
-		return &DevnullIndex{}, nil
+		return &DevNull{}, nil
 	}
 }
