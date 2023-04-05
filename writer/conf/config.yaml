@@ -1,0 +1,31 @@
+endpoint:
+  port: 2003
+  multicore: true
+  reuseport: true
+index:
+  addresses: ['https://localhost:9200']
+  name: goshenite
+  username: admin
+  password: admin
+  insecure: true
+  region: eu-central-1
+  sigv4: false
+  flush:
+    bytes: 10000  # 10 MB
+    interval: 6s  # 60 seconds
+store:
+  driver: cassandra
+  retention: 336h  # 2 weeks
+  resolution: 60s
+  hosts: ['localhost']
+  port: 9042
+  keyspace: disthene
+  username: cassandra
+  password: cassandra
+  table: metrics
+logging:
+  level: debug
+stats:
+  path: 'goshenite.interal'
+  interval: 60s
+  segment_group: 1
