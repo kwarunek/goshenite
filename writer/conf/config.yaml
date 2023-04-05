@@ -3,7 +3,8 @@ endpoint:
   multicore: true
   reuseport: true
 index:
-  addresses: ['https://localhost:9200']
+  addresses: 
+    - https://localhost:9200
   name: goshenite
   username: admin
   password: admin
@@ -19,7 +20,7 @@ store:
   resolution: 60s
   hosts: ['localhost']
   port: 9042
-  keyspace: disthene
+  keyspace: goshenite
   username: cassandra
   password: cassandra
   table: metrics
