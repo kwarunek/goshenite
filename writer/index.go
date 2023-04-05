@@ -19,7 +19,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type Index struct {
+type IIndex interface {
+	Index(datapoint *DataPoint) error
+}
+
+type OpensearchIndex struct {
 	// client *elasticsearch.Client
 	cache       *bigcache.BigCache
 	client      *opensearch.Client
@@ -32,7 +36,14 @@ type PathDoc struct {
 	depth int
 }
 
-func (idx *Index) Index(datapoint *DataPoint) error {
+type DevnullIndex struct{}
+
+func (i *DevnullIndex) Index(datapoint *DataPoint) error {
+	log.Debug("index:/dev/null: ", datapoint)
+	return nil
+}
+
+func (idx *OpensearchIndex) Index(datapoint *DataPoint) error {
 	segments := strings.Split(datapoint.Metric, ".")
 	if cached, err := idx.cache.Get(datapoint.Metric); len(cached) > 0 || err == nil {
 		log.Debug("HIT Metric cache: ", datapoint.Metric)
@@ -49,7 +60,7 @@ func (idx *Index) Index(datapoint *DataPoint) error {
 	return nil
 }
 
-func (idx *Index) add(doc *PathDoc) {
+func (idx *OpensearchIndex) add(doc *PathDoc) {
 	jdoc := fmt.Sprintf(`{"depth": %d, "leaf": %t, "path": "%s"}`, doc.depth, doc.leaf, doc.path)
 
 	err := idx.bulkIndexer.Add(
@@ -128,9 +139,7 @@ func NewOpenSearch(config *IndexConfig) (*opensearch.Client, opensearchutil.Bulk
 	return client, bulkIndexer, nil
 }
 
-//-------------------------------------------------------------------------------------
-
-func NewIndex(config *IndexConfig) (*Index, error) {
+func NewOpensearchIndex(config *IndexConfig) (IIndex, error) {
 	cacheConfig := bigcache.Config{
 		// TODO: should be configurable
 		Shards:           1024,
@@ -147,5 +156,14 @@ func NewIndex(config *IndexConfig) (*Index, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Index{cache: cache, client: client, bulkIndexer: bulkIndexer}, nil
+	return &OpensearchIndex{cache: cache, client: client, bulkIndexer: bulkIndexer}, nil
+}
+
+func NewIndex(config *IndexConfig) (IIndex, error) {
+	switch config.Driver {
+	case "opensearch":
+		return NewOpensearchIndex(config)
+	default:
+		return &DevnullIndex{}, nil
+	}
 }

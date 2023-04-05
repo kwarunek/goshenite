@@ -9,7 +9,13 @@ import (
 	"github.com/gocql/gocql"
 )
 
-type Store struct {
+type IStore interface {
+	Insert(*DataPoint) error
+}
+
+type DevnullStore struct{}
+
+type CassandraStore struct {
 	session             *gocql.Session
 	cluster             *gocql.ClusterConfig
 	resolutionInSeconds int64
@@ -17,7 +23,12 @@ type Store struct {
 	query               string
 }
 
-func (s *Store) Insert(datapoint *DataPoint) error {
+func (s *DevnullStore) Insert(datapoint *DataPoint) error {
+	log.Debug("store:/dev/null: ", datapoint)
+	return nil
+}
+
+func (s *CassandraStore) Insert(datapoint *DataPoint) error {
 	if datapoint.Timestamp < 1 {
 		datapoint.Timestamp = time.Now().Unix()
 	}
@@ -30,7 +41,7 @@ func (s *Store) Insert(datapoint *DataPoint) error {
 	return nil
 }
 
-func (s *Store) connect() error {
+func (s *CassandraStore) connect() error {
 	var err error
 	s.session, err = s.cluster.CreateSession()
 	if err != nil {
@@ -39,7 +50,7 @@ func (s *Store) connect() error {
 	return nil
 }
 
-func NewStore(config *StoreConfig) (*Store, error) {
+func NewCassandraStore(config *StoreConfig) (IStore, error) {
 	res := int64(ParseDurationWithFallback(config.Resolution, time.Second*60).Seconds())
 	ret := int64(ParseDurationWithFallback(config.Retention, time.Hour*24).Seconds())
 	cluster := gocql.NewCluster()
@@ -54,7 +65,7 @@ func NewStore(config *StoreConfig) (*Store, error) {
 	}
 
 	cluster.RetryPolicy = &gocql.ExponentialBackoffRetryPolicy{NumRetries: 3, Min: 3, Max: 90}
-	store := &Store{
+	store := &CassandraStore{
 		session:             nil,
 		cluster:             cluster,
 		query:               fmt.Sprintf(`UPDATE %s USING TTL %d SET value = ? WHERE path=? AND timestamp=?`, config.Table, ret),
@@ -64,4 +75,13 @@ func NewStore(config *StoreConfig) (*Store, error) {
 
 	err := store.connect()
 	return store, err
+}
+
+func NewStore(config *StoreConfig) (IStore, error) {
+	switch config.Driver {
+	case "cassandra":
+		return NewCassandraStore(config)
+	default:
+		return &DevnullStore{}, nil
+	}
 }

@@ -8,8 +8,8 @@ import (
 )
 
 type Bus struct {
-	store   *Store
-	index   *Index
+	store   IStore
+	index   IIndex
 	queue   *lane.Queue[*DataPoint]
 	running bool
 }
@@ -42,7 +42,7 @@ func (b *Bus) run() {
 	}
 }
 
-func NewBus(store *Store, index *Index) *Bus {
+func NewBus(store IStore, index IIndex) *Bus {
 	bus := &Bus{
 		index:   index,
 		store:   store,

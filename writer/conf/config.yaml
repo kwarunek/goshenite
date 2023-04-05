@@ -3,6 +3,7 @@ endpoint:
   multicore: true
   reuseport: true
 index:
+  driver: opensearch
   addresses: 
     - https://localhost:9200
   name: goshenite

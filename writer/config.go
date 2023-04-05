@@ -19,6 +19,7 @@ type EndpointConfig struct {
 	Reuseport bool
 }
 type StoreConfig struct {
+	Driver     string
 	Hosts      []string
 	Port       int
 	Retention  string
@@ -29,6 +30,7 @@ type StoreConfig struct {
 	Table      string
 }
 type IndexConfig struct {
+	Driver    string
 	Addresses []string
 	Name      string
 	Password  string
