@@ -11,6 +11,7 @@ type Stats struct {
 	sync.RWMutex
 	metrics map[string]int64
 	config  *StatsConfig
+	flusher func(datapoint *DataPoint)
 }
 
 func (s *Stats) Record(unit string, stat string, value ...int64) {
@@ -23,7 +24,8 @@ func (s *Stats) Record(unit string, stat string, value ...int64) {
 	s.metrics[s.config.Path+"."+unit+"."+stat] += val
 }
 
-func (s *Stats) Start() {
+func (s *Stats) Start(flusher func(datapoint *DataPoint)) {
+	s.flusher = flusher
 	ticker := time.NewTicker(ParseDurationWithFallback(s.config.Interval, 60*time.Second))
 	defer ticker.Stop()
 	for {
@@ -33,6 +35,7 @@ func (s *Stats) Start() {
 		}
 	}
 }
+
 func (s *Stats) Flush() {
 	s.Lock()
 	frozenStat := make(map[string]int64)
@@ -41,11 +44,11 @@ func (s *Stats) Flush() {
 		s.metrics[m] = 0
 	}
 	s.Unlock()
-	if len(frozenStat) > 0 {
-		// TODO: emit datapoint
-		log.Info(frozenStat)
-
+	for m, v := range frozenStat {
+		s.flusher(&DataPoint{Metric: m, Value: float64(v), Timestamp: 0})
+		log.Debug(frozenStat)
 	}
+
 }
 
 func NewStats(config *StatsConfig) *Stats {

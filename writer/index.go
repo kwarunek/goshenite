@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
@@ -28,6 +29,7 @@ type OpensearchIndex struct {
 	cache       *bigcache.BigCache
 	client      *opensearch.Client
 	bulkIndexer opensearchutil.BulkIndexer
+	stats       *Stats
 }
 
 type PathDoc struct {
@@ -49,8 +51,17 @@ func (idx *OpensearchIndex) Index(datapoint *DataPoint) error {
 			idx.cache.Set(metric, []byte{})
 		}
 	}
-	log.Debug(idx.bulkIndexer.Stats())
 	return nil
+}
+
+func (idx *OpensearchIndex) flushEnd(ctx context.Context) {
+	ws := idx.bulkIndexer.Stats()
+	v := reflect.ValueOf(ws)
+	t := v.Type()
+
+	for i := 0; i < v.NumField(); i++ {
+		idx.stats.Record("index", t.Field(i).Name, int64(v.Field(i).Interface().(uint64)))
+	}
 }
 
 func (idx *OpensearchIndex) add(doc *PathDoc) {
@@ -80,7 +91,7 @@ func (idx *OpensearchIndex) add(doc *PathDoc) {
 	}
 }
 
-func NewOpenSearch(config *IndexConfig) (*opensearch.Client, opensearchutil.BulkIndexer, error) {
+func NewOpenSearch(config *IndexConfig, onFlushEnd func(context.Context)) (*opensearch.Client, opensearchutil.BulkIndexer, error) {
 	ctx := context.Background()
 	var signer signer.Signer
 	var tlsTransport *http.Transport
@@ -123,6 +134,7 @@ func NewOpenSearch(config *IndexConfig) (*opensearch.Client, opensearchutil.Bulk
 		FlushBytes:    config.Flush.Bytes,
 		FlushInterval: ParseDurationWithFallback(config.Flush.Interval, 5*time.Minute),
 		OnError:       func(context.Context, error) { log.Error("OpenSearch ", err) },
+		OnFlushEnd:    onFlushEnd,
 	})
 
 	if err != nil {
@@ -132,7 +144,10 @@ func NewOpenSearch(config *IndexConfig) (*opensearch.Client, opensearchutil.Bulk
 	return client, bulkIndexer, nil
 }
 
-func NewOpensearchIndex(config *IndexConfig) (IIndex, error) {
+func NewOpensearchIndex(config *IndexConfig, stats *Stats) (IIndex, error) {
+	var err error
+	oi := &OpensearchIndex{cache: nil, client: nil, bulkIndexer: nil, stats: stats}
+
 	cacheConfig := bigcache.Config{
 		// TODO: should be configurable
 		Shards:           1024,
@@ -141,21 +156,21 @@ func NewOpensearchIndex(config *IndexConfig) (IIndex, error) {
 		MaxEntrySize:     500,
 		HardMaxCacheSize: 0,
 	}
-	cache, err := bigcache.New(context.Background(), cacheConfig)
+	oi.cache, err = bigcache.New(context.Background(), cacheConfig)
 	if err != nil {
 		return nil, err
 	}
-	client, bulkIndexer, err := NewOpenSearch(config)
+	oi.client, oi.bulkIndexer, err = NewOpenSearch(config, oi.flushEnd)
 	if err != nil {
 		return nil, err
 	}
-	return &OpensearchIndex{cache: cache, client: client, bulkIndexer: bulkIndexer}, nil
+	return oi, nil
 }
 
-func NewIndex(config *IndexConfig) (IIndex, error) {
+func NewIndex(config *IndexConfig, stats *Stats) (IIndex, error) {
 	switch config.Driver {
 	case "opensearch":
-		return NewOpensearchIndex(config)
+		return NewOpensearchIndex(config, stats)
 	default:
 		return &DevNull{}, nil
 	}

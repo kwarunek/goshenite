@@ -12,6 +12,7 @@ type Bus struct {
 	index   IIndex
 	queue   *lane.Queue[*DataPoint]
 	running bool
+	stats   *Stats
 }
 
 func (b *Bus) Emit(datapoint *DataPoint) {
@@ -25,6 +26,7 @@ func (b *Bus) Stop() {
 func (b *Bus) Start() {
 	b.running = true
 	go b.run()
+	go b.stats.Start(b.Emit)
 }
 
 func (b *Bus) run() {
@@ -42,11 +44,12 @@ func (b *Bus) run() {
 	}
 }
 
-func NewBus(store IStore, index IIndex) *Bus {
+func NewBus(store IStore, index IIndex, stats *Stats) *Bus {
 	bus := &Bus{
 		index:   index,
 		store:   store,
 		running: false,
+		stats:   stats,
 		queue:   lane.NewQueue[*DataPoint](),
 	}
 	return bus

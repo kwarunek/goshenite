@@ -19,6 +19,7 @@ type CassandraStore struct {
 	resolutionInSeconds int64
 	retentionInSeconds  int64
 	query               string
+	stats               *Stats
 }
 
 func (s *CassandraStore) Insert(datapoint *DataPoint) error {
@@ -29,8 +30,10 @@ func (s *CassandraStore) Insert(datapoint *DataPoint) error {
 	err := s.session.Query(s.query, datapoint.Value, datapoint.Metric, resTs).Exec()
 	if err != nil {
 		log.Error("Failed inserting data into Cassandra:", err)
+		s.stats.Record("cassandra", "store.failed")
 		return err
 	}
+	s.stats.Record("cassandra", "store.success")
 	return nil
 }
 
@@ -43,7 +46,7 @@ func (s *CassandraStore) connect() error {
 	return nil
 }
 
-func NewCassandraStore(config *StoreConfig) (IStore, error) {
+func NewCassandraStore(config *StoreConfig, stats *Stats) (IStore, error) {
 	res := int64(ParseDurationWithFallback(config.Resolution, time.Second*60).Seconds())
 	ret := int64(ParseDurationWithFallback(config.Retention, time.Hour*24).Seconds())
 	cluster := gocql.NewCluster()
@@ -64,16 +67,17 @@ func NewCassandraStore(config *StoreConfig) (IStore, error) {
 		query:               fmt.Sprintf(`UPDATE %s USING TTL %d SET value = ? WHERE path=? AND timestamp=?`, config.Table, ret),
 		retentionInSeconds:  int64(ret),
 		resolutionInSeconds: int64(res),
+		stats:               stats,
 	}
 
 	err := store.connect()
 	return store, err
 }
 
-func NewStore(config *StoreConfig) (IStore, error) {
+func NewStore(config *StoreConfig, stats *Stats) (IStore, error) {
 	switch config.Driver {
 	case "cassandra":
-		return NewCassandraStore(config)
+		return NewCassandraStore(config, stats)
 	default:
 		return &DevNull{}, nil
 	}

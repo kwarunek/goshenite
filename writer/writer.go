@@ -18,23 +18,21 @@ func main() {
 	flag.Parse()
 	config := PrepareConfig(configFile)
 
+	stats := NewStats(config.Stats)
+
 	// Set up store
-	store, err := NewStore(config.Store)
+	store, err := NewStore(config.Store, stats)
 	if err != nil {
 		log.Fatal("Cannot initialize store connection:", err)
 
 	}
 	// Set up index
-	index, err := NewIndex(config.Index)
+	index, err := NewIndex(config.Index, stats)
 	if err != nil {
 		log.Fatal("Cannot initialize index connection:", err)
 	}
 
-	// Set up stats
-	stats := NewStats(config.Stats)
-	go stats.Start()
-
-	bus := NewBus(store, index)
+	bus := NewBus(store, index, stats)
 	go bus.Start()
 
 	server := &gosheniteServer{

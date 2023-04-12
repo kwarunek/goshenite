@@ -13,10 +13,10 @@ index:
   region: eu-central-1
   sigv4: false
   flush:
-    bytes: 10000  # 10 MB
-    interval: 6s  # 60 seconds
+    bytes: 10000000  # 10 MB
+    interval: 45s
 store:
-  driver: cassandra
+  driver: devnull
   retention: 336h  # 2 weeks
   resolution: 60s
   hosts: ['localhost']
