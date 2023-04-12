@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -21,7 +22,14 @@ func (s *Stats) Record(unit string, stat string, value ...int64) {
 	}
 	s.Lock()
 	defer s.Unlock()
-	s.metrics[s.config.Path+"."+unit+"."+stat] += val
+	s.metrics[unit+"."+stat] += val
+}
+
+func (s *Stats) RecordMetricIngestion(metric string) {
+	if s.config.Segment > 0 {
+		segment := strings.Split(metric, ".")[0]
+		s.Record("metric", segment)
+	}
 }
 
 func (s *Stats) Start(flusher func(datapoint *DataPoint)) {
@@ -45,8 +53,14 @@ func (s *Stats) Flush() {
 	}
 	s.Unlock()
 	for m, v := range frozenStat {
-		s.flusher(&DataPoint{Metric: m, Value: float64(v), Timestamp: 0})
-		log.Debug(frozenStat)
+		s.flusher(&DataPoint{Metric: s.config.Path + "." + m, Value: float64(v), Timestamp: 0})
+		if s.config.Log && !strings.HasPrefix(m, "metric") {
+			log.WithFields(log.Fields{
+				"metric": m,
+				"value":  v,
+			}).Info("Stats")
+
+		}
 	}
 
 }

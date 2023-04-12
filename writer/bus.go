@@ -16,6 +16,7 @@ type Bus struct {
 }
 
 func (b *Bus) Emit(datapoint *DataPoint) {
+	b.stats.RecordMetricIngestion(datapoint.Metric)
 	b.queue.Enqueue(datapoint)
 }
 

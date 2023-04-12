@@ -14,7 +14,7 @@ index:
   sigv4: false
   flush:
     bytes: 10000000  # 10 MB
-    interval: 45s
+    interval: 5s
 store:
   driver: devnull
   retention: 336h  # 2 weeks
@@ -30,4 +30,5 @@ logging:
 stats:
   path: 'goshenite.interal'
   interval: 60s
-  segment_group: 1
+  log: true
+  segment: 1

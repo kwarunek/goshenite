@@ -44,9 +44,10 @@ type IndexConfig struct {
 	}
 }
 type StatsConfig struct {
-	Path         string
-	Interval     string // 60s
-	SegmentGroup int
+	Path     string
+	Interval string // 60s
+	Log      bool
+	Segment  int
 }
 type LoggerConfig struct {
 	Level string
