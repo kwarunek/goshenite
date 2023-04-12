@@ -10,9 +10,11 @@ import (
 
 type Stats struct {
 	sync.RWMutex
-	metrics map[string]int64
-	config  *StatsConfig
-	flusher func(datapoint *DataPoint)
+	metrics   map[string]int64
+	config    *StatsConfig
+	flusher   func(datapoint *DataPoint)
+	lastFlush int64
+	hostname  string
 }
 
 func (s *Stats) Record(unit string, stat string, value ...int64) {
@@ -23,6 +25,13 @@ func (s *Stats) Record(unit string, stat string, value ...int64) {
 	s.Lock()
 	defer s.Unlock()
 	s.metrics[unit+"."+stat] += val
+}
+
+func (s *Stats) Drain() {
+	ts := time.Now().Unix()
+	for len(s.metrics) > 0 && s.lastFlush-ts > 0 {
+		time.Sleep(1 * time.Minute)
+	}
 }
 
 func (s *Stats) RecordMetricIngestion(metric string) {
@@ -53,7 +62,7 @@ func (s *Stats) Flush() {
 	}
 	s.Unlock()
 	for m, v := range frozenStat {
-		s.flusher(&DataPoint{Metric: s.config.Path + "." + m, Value: float64(v), Timestamp: 0})
+		s.flusher(&DataPoint{Metric: s.config.Path + "." + s.hostname + "." + m, Value: float64(v), Timestamp: 0})
 		if s.config.Log && !strings.HasPrefix(m, "metric") {
 			log.WithFields(log.Fields{
 				"metric": m,
@@ -62,10 +71,11 @@ func (s *Stats) Flush() {
 
 		}
 	}
+	s.lastFlush = time.Now().Unix()
 
 }
 
-func NewStats(config *StatsConfig) *Stats {
+func NewStats(config *StatsConfig, hostname string) *Stats {
 	metrics := make(map[string]int64)
-	return &Stats{metrics: metrics, config: config}
+	return &Stats{metrics: metrics, config: config, hostname: hostname, lastFlush: 0}
 }

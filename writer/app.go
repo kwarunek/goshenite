@@ -4,24 +4,30 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
-	"time"
 
-	log "github.com/sirupsen/logrus"
-
+	"github.com/Pallinder/go-randomdata"
 	"github.com/panjf2000/gnet/v2"
+	log "github.com/sirupsen/logrus"
 )
 
 type App struct {
 	sync.RWMutex
-	bus    *Bus
-	server *GosheniteServer
-	config *Config
-	exit   chan bool
+	bus      *Bus
+	server   *GosheniteServer
+	config   *Config
+	exit     chan bool
+	hostname string
 }
 
 func NewApp(config *Config) *App {
-	stats := NewStats(config.Stats)
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = randomdata.SillyName()
+		log.Warn("Cannot determine hostname, generated: ", hostname)
+	}
+	stats := NewStats(config.Stats, hostname)
 
 	store, err := NewStore(config.Store, stats)
 	if err != nil {
@@ -44,10 +50,11 @@ func NewApp(config *Config) *App {
 		bus:   bus,
 	}
 	app := &App{
-		config: config,
-		server: server,
-		bus:    bus,
-		exit:   make(chan bool),
+		config:   config,
+		server:   server,
+		bus:      bus,
+		hostname: hostname,
+		exit:     make(chan bool),
 	}
 	return app
 
@@ -78,13 +85,8 @@ func (app *App) Loop() {
 	}
 }
 func (app *App) Shutdown(ctx context.Context) {
-	log.Info("Shutting down server...")
 	app.server.Shutdown(ctx)
-	log.Info("Draining bus (metric queue)...")
 	app.bus.Drain(ctx)
-	// TODO flush Stats
-	log.Info("Waiting to auto-flush stats...")
-	time.Sleep(1 * time.Minute)
 	if app.exit != nil {
 		close(app.exit)
 		app.exit = nil

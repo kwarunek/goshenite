@@ -40,5 +40,6 @@ func (server *GosheniteServer) OnTraffic(c gnet.Conn) gnet.Action {
 }
 
 func (server *GosheniteServer) Shutdown(ctx context.Context) {
+	log.Info("Shutting down server...")
 	server.eng.Stop(ctx)
 }

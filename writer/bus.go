@@ -32,15 +32,25 @@ func (b *Bus) Start() {
 }
 
 func (b *Bus) Drain(ctx context.Context) {
+	log.Info("Draining bus (metric queue)...")
+	drainedStats := false
 	for {
 		datapoint, ok := b.queue.Dequeue()
 		if !ok {
-			break
+			if drainedStats {
+				break
+			} else {
+				log.Info("Draining stats...")
+				b.stats.Drain()
+				drainedStats = true
+			}
+			continue
 		}
 		b.store.Insert(datapoint)
 		b.index.Index(datapoint)
 	}
 	b.index.Shutdown(ctx)
+
 }
 
 func (b *Bus) run() {
