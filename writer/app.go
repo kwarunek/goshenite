@@ -24,7 +24,7 @@ type App struct {
 func NewApp(config *Config) *App {
 	hostname, err := os.Hostname()
 	if err != nil {
-		hostname = randomdata.SillyName()
+		hostname = randomdata.Noun()
 		log.Warn("Cannot determine hostname, generated: ", hostname)
 	}
 	stats := NewStats(config.Stats, hostname)
