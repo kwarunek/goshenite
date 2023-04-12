@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"time"
 
 	lane "github.com/oleiade/lane/v2"
@@ -30,9 +31,20 @@ func (b *Bus) Start() {
 	go b.stats.Start(b.Emit)
 }
 
-func (b *Bus) run() {
-	log.Info("BUS started")
+func (b *Bus) Drain(ctx context.Context) {
+	for {
+		datapoint, ok := b.queue.Dequeue()
+		if !ok {
+			break
+		}
+		b.store.Insert(datapoint)
+		b.index.Index(datapoint)
+	}
+	b.index.Shutdown(ctx)
+}
 
+func (b *Bus) run() {
+	log.Info("Bus started")
 	for b.running {
 		datapoint, ok := b.queue.Dequeue()
 		if !ok {

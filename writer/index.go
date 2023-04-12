@@ -22,6 +22,7 @@ import (
 
 type IIndex interface {
 	Index(datapoint *DataPoint) error
+	Shutdown(ctx context.Context)
 }
 
 type OpensearchIndex struct {
@@ -62,6 +63,10 @@ func (idx *OpensearchIndex) flushEnd(ctx context.Context) {
 	for i := 0; i < v.NumField(); i++ {
 		idx.stats.Record("index", t.Field(i).Name, int64(v.Field(i).Interface().(uint64)))
 	}
+}
+
+func (idx *OpensearchIndex) Shutdown(ctx context.Context) {
+	idx.bulkIndexer.Close(ctx)
 }
 
 func (idx *OpensearchIndex) add(doc *PathDoc) {

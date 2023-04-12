@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
+
 	log "github.com/sirupsen/logrus"
 
 	"github.com/panjf2000/gnet/v2"
 )
 
-type gosheniteServer struct {
+type GosheniteServer struct {
 	gnet.BuiltinEventEngine
 
 	eng       gnet.Engine
@@ -16,18 +18,18 @@ type gosheniteServer struct {
 	bus       *Bus
 }
 
-func (server *gosheniteServer) OnBoot(eng gnet.Engine) gnet.Action {
+func (server *GosheniteServer) OnBoot(eng gnet.Engine) gnet.Action {
 	server.eng = eng
-	log.Printf("Goshenite is listening on %s\n", server.addr)
+	log.Info("Server started: listening on ", server.addr)
 	return gnet.None
 }
 
-func (server *gosheniteServer) OnOpen(c gnet.Conn) (out []byte, action gnet.Action) {
-	go server.stats.Record("tcp", "connections")
+func (server *GosheniteServer) OnOpen(c gnet.Conn) (out []byte, action gnet.Action) {
+	server.stats.Record("tcp", "connections")
 	return nil, gnet.None
 }
 
-func (server *gosheniteServer) OnTraffic(c gnet.Conn) gnet.Action {
+func (server *GosheniteServer) OnTraffic(c gnet.Conn) gnet.Action {
 	buf, _ := c.Next(-1)
 
 	dps, _ := ParsePlainGraphiteProtocol(buf)
@@ -35,4 +37,8 @@ func (server *gosheniteServer) OnTraffic(c gnet.Conn) gnet.Action {
 		server.bus.Emit(&dp)
 	}
 	return gnet.Close
+}
+
+func (server *GosheniteServer) Shutdown(ctx context.Context) {
+	server.eng.Stop(ctx)
 }
