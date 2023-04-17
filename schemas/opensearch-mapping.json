@@ -3,7 +3,7 @@
         "properties" : { 
             "depth" : { "type" : "long" }, 
             "leaf" : { "type" : "boolean" }, 
-            "path" : { "type" : "text", "index" : true }, 
+            "path" : { "type" : "keyword", "index" : true }, 
             "origin" : { "type" : "text", "index" : false } 
         } 
     }

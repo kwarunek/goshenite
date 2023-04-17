@@ -13,6 +13,7 @@ import (
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	opensearch "github.com/opensearch-project/opensearch-go/v2"
+	opensearchapi "github.com/opensearch-project/opensearch-go/v2/opensearchapi"
 	opensearchutil "github.com/opensearch-project/opensearch-go/v2/opensearchutil"
 	"github.com/opensearch-project/opensearch-go/v2/signer"
 	requestsigner "github.com/opensearch-project/opensearch-go/v2/signer/awsv2"
@@ -28,6 +29,7 @@ type IIndex interface {
 type OpensearchIndex struct {
 	// client *elasticsearch.Client
 	cache       *bigcache.BigCache
+	config      *IndexConfig
 	client      *opensearch.Client
 	bulkIndexer opensearchutil.BulkIndexer
 	stats       *Stats
@@ -39,16 +41,34 @@ type PathDoc struct {
 	depth int
 }
 
-func (idx *OpensearchIndex) Index(datapoint *DataPoint) error {
-	segments := strings.Split(datapoint.Metric, ".")
-	if cached, err := idx.cache.Get(datapoint.Metric); len(cached) > 0 || err == nil {
-		log.Debug("HIT Metric cache: ", datapoint.Metric)
-	} else {
+func (idx *OpensearchIndex) exists(metric string) bool {
+	getter := opensearchapi.GetRequest{Index: idx.config.Name, DocumentID: metric}
+	res, err := getter.Do(context.Background(), idx.client)
+	return (err == nil && res.StatusCode == 200)
+}
 
-		for i, j := 1, len(segments); i <= j; i++ {
-			metric := strings.Join(segments[:i], ".")
-			isLeaf := i == j
-			idx.add(&PathDoc{depth: i, leaf: isLeaf, path: metric})
+func (idx *OpensearchIndex) Index(datapoint *DataPoint) error {
+	if cached, err := idx.cache.Get(datapoint.Metric); len(cached) > 0 || err == nil {
+		idx.stats.Record("index", "cache.hit")
+		// if there is a whole metric in the cache dont even try with a subpath
+		return nil
+	}
+
+	segments := strings.Split(datapoint.Metric, ".")
+
+	for i, j := 1, len(segments); i <= j; i++ {
+		metric := strings.Join(segments[:i], ".")
+		isLeaf := i == j
+		// TODO: use mget
+		if cachedSub, err := idx.cache.Get(metric); len(cachedSub) > 0 || err == nil {
+			idx.stats.Record("index", "cache.hit")
+		} else {
+			idx.stats.Record("index", "cache.miss")
+			if !idx.exists(metric) {
+				idx.add(&PathDoc{depth: i, leaf: isLeaf, path: metric})
+			} else {
+				idx.stats.Record("index", "doc.already_in")
+			}
 			idx.cache.Set(metric, []byte{})
 		}
 	}
@@ -151,15 +171,14 @@ func NewOpenSearch(config *IndexConfig, onFlushEnd func(context.Context)) (*open
 
 func NewOpensearchIndex(config *IndexConfig, stats *Stats) (IIndex, error) {
 	var err error
-	oi := &OpensearchIndex{cache: nil, client: nil, bulkIndexer: nil, stats: stats}
+	oi := &OpensearchIndex{cache: nil, config: config, client: nil, bulkIndexer: nil, stats: stats}
 
 	cacheConfig := bigcache.Config{
-		// TODO: should be configurable
-		Shards:           1024,
-		LifeWindow:       10 * time.Minute,
-		CleanWindow:      5 * time.Minute,
-		MaxEntrySize:     500,
-		HardMaxCacheSize: 0,
+		Shards:           config.Cache.Shards,
+		LifeWindow:       ParseDurationWithFallback(config.Cache.Lifewindow, 10*time.Minute),
+		CleanWindow:      ParseDurationWithFallback(config.Cache.Cleanwindow, 5*time.Minute),
+		MaxEntrySize:     200, // arbitrary, used in init alloc
+		HardMaxCacheSize: config.Cache.Size,
 	}
 	oi.cache, err = bigcache.New(context.Background(), cacheConfig)
 	if err != nil {

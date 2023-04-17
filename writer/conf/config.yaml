@@ -13,8 +13,13 @@ index:
   region: eu-central-1
   sigv4: false
   flush:
-    bytes: 10000000  # 10 MB
+    bytes: 10485760  # 10 MB
     interval: 5s
+  cache:
+    shards: 1024
+    lifewindow: 30m
+    cleanwindow: 5m
+    size: 2684354560  # 2.5GB
 store:
   driver: devnull
   retention: 336h  # 2 weeks

@@ -42,6 +42,12 @@ type IndexConfig struct {
 		Bytes    int
 		Interval string // duration X[m,s,h]
 	}
+	Cache struct {
+		Shards      int
+		Lifewindow  string // duration
+		Cleanwindow string // duration
+		Size        int    // in bytes max cache size
+	}
 }
 type StatsConfig struct {
 	Path     string

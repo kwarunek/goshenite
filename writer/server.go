@@ -36,7 +36,7 @@ func (server *GosheniteServer) OnTraffic(c gnet.Conn) gnet.Action {
 	for _, dp := range dps {
 		server.bus.Emit(&dp)
 	}
-	return gnet.Close
+	return gnet.None
 }
 
 func (server *GosheniteServer) Shutdown(ctx context.Context) {
