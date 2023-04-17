@@ -19,7 +19,7 @@ index:
     shards: 1024
     lifewindow: 30m
     cleanwindow: 5m
-    size: 2684354560  # 2.5GB
+    size: 2560  # in MB
 store:
   driver: devnull
   retention: 336h  # 2 weeks
