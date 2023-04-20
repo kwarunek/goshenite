@@ -42,7 +42,7 @@ func NewApp(config *Config) *App {
 	}
 	log.Info("Index inited: ", config.Index.Driver)
 
-	bus := NewBus(store, index, stats)
+	bus := NewBus(store, index, stats, config.Bus)
 
 	server := &GosheniteServer{
 		addr:  fmt.Sprintf("tcp://:%d", config.Endpoint.Port),

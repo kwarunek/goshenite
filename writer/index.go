@@ -83,6 +83,7 @@ func (idx *OpensearchIndex) flushEnd(ctx context.Context) {
 	for i := 0; i < v.NumField(); i++ {
 		idx.stats.Record("index", t.Field(i).Name, int64(v.Field(i).Interface().(uint64)))
 	}
+	idx.stats.RecordFixed("index", "cache.size", int64(idx.cache.Len()))
 }
 
 func (idx *OpensearchIndex) Shutdown(ctx context.Context) {

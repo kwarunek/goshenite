@@ -17,6 +17,12 @@ type Stats struct {
 	hostname  string
 }
 
+func (s *Stats) RecordFixed(unit string, stat string, value int64) {
+	s.Lock()
+	defer s.Unlock()
+	s.metrics[unit+"."+stat] = value
+}
+
 func (s *Stats) Record(unit string, stat string, value ...int64) {
 	val := int64(1)
 	if len(value) > 0 {

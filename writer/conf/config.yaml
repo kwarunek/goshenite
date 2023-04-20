@@ -2,6 +2,8 @@ endpoint:
   port: 2003
   multicore: true
   reuseport: true
+bus:
+  queued: false
 index:
   driver: opensearch
   addresses: 

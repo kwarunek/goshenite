@@ -9,6 +9,7 @@ import (
 )
 
 type Bus struct {
+	config  *BusConfig
 	store   IStore
 	index   IIndex
 	queue   *lane.Queue[*DataPoint]
@@ -18,7 +19,13 @@ type Bus struct {
 
 func (b *Bus) Emit(datapoint *DataPoint) {
 	b.stats.RecordMetricIngestion(datapoint.Metric)
-	b.queue.Enqueue(datapoint)
+	b.stats.Record("bus", "queue.added")
+	if b.config.Queued {
+		b.queue.Enqueue(datapoint)
+	} else {
+		b.put(datapoint)
+	}
+
 }
 
 func (b *Bus) Stop() {
@@ -34,20 +41,22 @@ func (b *Bus) Start() {
 func (b *Bus) Drain(ctx context.Context) {
 	log.Info("Draining bus (metric queue)...")
 	drainedStats := false
-	for {
-		datapoint, ok := b.queue.Dequeue()
-		if !ok {
-			if drainedStats {
-				break
-			} else {
-				log.Info("Draining stats...")
-				b.stats.Drain()
-				drainedStats = true
+	if b.config.Queued {
+		for {
+			datapoint, ok := b.queue.Dequeue()
+			if !ok {
+				if drainedStats {
+					break
+				} else {
+					log.Info("Draining stats...")
+					b.stats.Drain()
+					drainedStats = true
+				}
+				continue
 			}
-			continue
+			b.store.Insert(datapoint)
+			b.index.Index(datapoint)
 		}
-		b.store.Insert(datapoint)
-		b.index.Index(datapoint)
 	}
 	b.index.Shutdown(ctx)
 
@@ -55,20 +64,35 @@ func (b *Bus) Drain(ctx context.Context) {
 
 func (b *Bus) run() {
 	log.Info("Bus started")
+	statsDumpTs := time.Now().Unix()
 	for b.running {
-		datapoint, ok := b.queue.Dequeue()
+		var datapoint *DataPoint
+		ok := false
+		if b.config.Queued {
+			datapoint, ok = b.queue.Dequeue()
+			curTs := time.Now().Unix()
+			if (curTs - statsDumpTs) > 59 {
+				b.stats.RecordFixed("bus", "queue.size", int64(b.queue.Size()))
+				statsDumpTs = curTs
+			}
+		}
 		if !ok {
-
 			time.Sleep(time.Second)
 			continue
 		}
-		b.store.Insert(datapoint)
-		b.index.Index(datapoint)
+		b.put(datapoint)
+		b.stats.Record("bus", "queue.processed")
 	}
 }
 
-func NewBus(store IStore, index IIndex, stats *Stats) *Bus {
+func (b *Bus) put(datapoint *DataPoint) {
+	b.store.Insert(datapoint)
+	b.index.Index(datapoint)
+}
+
+func NewBus(store IStore, index IIndex, stats *Stats, config *BusConfig) *Bus {
 	bus := &Bus{
+		config:  config,
 		index:   index,
 		store:   store,
 		running: false,

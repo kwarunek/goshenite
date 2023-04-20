@@ -12,6 +12,10 @@ type Config struct {
 	Endpoint *EndpointConfig
 	Stats    *StatsConfig
 	Logger   *LoggerConfig
+	Bus      *BusConfig
+}
+type BusConfig struct {
+	Queued bool
 }
 type EndpointConfig struct {
 	Port      int
