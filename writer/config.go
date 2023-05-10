@@ -11,7 +11,7 @@ type Config struct {
 	Store    *StoreConfig
 	Endpoint *EndpointConfig
 	Stats    *StatsConfig
-	Logger   *LoggerConfig
+	General  *GeneralConfig
 	Bus      *BusConfig
 }
 type BusConfig struct {
@@ -47,10 +47,7 @@ type IndexConfig struct {
 		Interval string // duration X[m,s,h]
 	}
 	Cache struct {
-		Shards      int
-		Lifewindow  string // duration
-		Cleanwindow string // duration
-		Size        int    // in bytes max cache size
+		Size int // in bytes max cache size
 	}
 }
 type StatsConfig struct {
@@ -59,8 +56,9 @@ type StatsConfig struct {
 	Log      bool
 	Segment  int
 }
-type LoggerConfig struct {
-	Level string
+type GeneralConfig struct {
+	Level    string
+	Profiler bool
 }
 
 func PrepareConfig(configFile string) *Config {

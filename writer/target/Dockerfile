@@ -8,5 +8,6 @@ COPY ./goshenite-writer /opt/goshenite/goshenite-writer
 COPY ./writer-config.yaml /opt/goshenite/writer-config.yaml
 
 EXPOSE 2003/tcp
+EXPOSE 9999/tcp
 
 ENTRYPOINT ["/opt/goshenite/goshenite-writer", "-c", "/opt/goshenite/writer-config.yaml"]

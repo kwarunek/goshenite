@@ -4,12 +4,13 @@ go 1.20
 
 require (
 	github.com/Pallinder/go-randomdata v1.2.0
-	github.com/allegro/bigcache/v3 v3.1.0
 	github.com/aws/aws-sdk-go-v2/config v1.18.19
 	github.com/gocql/gocql v1.3.2
+	github.com/hashicorp/golang-lru/v2 v2.0.2
 	github.com/oleiade/lane/v2 v2.0.0
 	github.com/opensearch-project/opensearch-go/v2 v2.2.0
 	github.com/panjf2000/gnet/v2 v2.2.6
+	github.com/pkg/profile v1.7.0
 	github.com/sherifabdlnaby/configuro v0.0.3
 	github.com/sirupsen/logrus v1.2.0
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
@@ -27,11 +28,13 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.14.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.18.7 // indirect
 	github.com/aws/smithy-go v1.13.5 // indirect
+	github.com/felixge/fgprof v0.9.3 // indirect
 	github.com/fsnotify/fsnotify v1.4.7 // indirect
 	github.com/go-playground/locales v0.13.0 // indirect
 	github.com/go-playground/universal-translator v0.17.0 // indirect
 	github.com/go-playground/validator v9.31.0+incompatible // indirect
 	github.com/golang/snappy v0.0.3 // indirect
+	github.com/google/pprof v0.0.0-20211214055906-6f57359322fd // indirect
 	github.com/hailocab/go-hostpool v0.0.0-20160125115350-e80d13ce29ed // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/joho/godotenv v1.3.0 // indirect

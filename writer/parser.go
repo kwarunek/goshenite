@@ -4,7 +4,6 @@ package main
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"math"
 	"strconv"
 	"unsafe"
@@ -26,12 +25,12 @@ func PlainLine(p []byte) ([]byte, float64, int64, error) {
 
 	i1 := bytes.IndexByte(p, ' ')
 	if i1 < 1 {
-		return nil, 0, 0, fmt.Errorf("bad message: %#v", string(p))
+		return nil, 0, 0, errors.New("bad_message")
 	}
 
 	i2 := bytes.IndexByte(p[i1+1:], ' ')
 	if i2 < 1 {
-		return nil, 0, 0, fmt.Errorf("bad message: %#v", string(p))
+		return nil, 0, 0, errors.New("bad_message")
 	}
 	i2 += i1 + 1
 
@@ -39,12 +38,13 @@ func PlainLine(p []byte) ([]byte, float64, int64, error) {
 
 	value, err := strconv.ParseFloat(unsafeString(p[i1+1:i2]), 64)
 	if err != nil || math.IsNaN(value) {
-		return nil, 0, 0, fmt.Errorf("bad message: %#v", string(p))
+		//return nil, 0, 0, fmt.Errorf("bad_message: %#v", string(p))
+		return nil, 0, 0, errors.New("bad_message")
 	}
 
 	tsf, err := strconv.ParseFloat(unsafeString(p[i2+1:i3]), 64)
 	if err != nil || math.IsNaN(tsf) {
-		return nil, 0, 0, fmt.Errorf("bad message: %#v", string(p))
+		return nil, 0, 0, errors.New("bad_message")
 	}
 
 	return p[:i1], value, int64(tsf), nil
@@ -60,7 +60,7 @@ MainLoop:
 	for offset < size {
 		lineEnd := bytes.IndexByte(body[offset:size], '\n')
 		if lineEnd < 0 {
-			return result, errors.New("unfinished line")
+			return result, errors.New("unfinished_line")
 		} else if lineEnd == 0 {
 			// skip empty line
 			offset++

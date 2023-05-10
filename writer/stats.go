@@ -78,7 +78,6 @@ func (s *Stats) Flush() {
 		}
 	}
 	s.lastFlush = time.Now().Unix()
-
 }
 
 func NewStats(config *StatsConfig, hostname string) *Stats {

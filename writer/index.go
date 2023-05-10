@@ -4,12 +4,13 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"net"
 	"net/http"
 	"reflect"
 	"strings"
 	"time"
 
-	"github.com/allegro/bigcache/v3"
+	lru "github.com/hashicorp/golang-lru/v2"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	opensearch "github.com/opensearch-project/opensearch-go/v2"
@@ -27,8 +28,7 @@ type IIndex interface {
 }
 
 type OpensearchIndex struct {
-	// client *elasticsearch.Client
-	cache       *bigcache.BigCache
+	cache       *lru.ARCCache[string, int64]
 	config      *IndexConfig
 	client      *opensearch.Client
 	bulkIndexer opensearchutil.BulkIndexer
@@ -44,11 +44,19 @@ type PathDoc struct {
 func (idx *OpensearchIndex) exists(metric string) bool {
 	getter := opensearchapi.GetRequest{Index: idx.config.Name, DocumentID: metric}
 	res, err := getter.Do(context.Background(), idx.client)
+	if res.Body != nil {
+		defer res.Body.Close()
+	}
 	return (err == nil && res.StatusCode == 200)
 }
 
+func (idx *OpensearchIndex) isCached(metric string) bool {
+	val, ok := idx.cache.Get(metric)
+	return ok && (val == 123)
+}
+
 func (idx *OpensearchIndex) Index(datapoint *DataPoint) error {
-	if cached, err := idx.cache.Get(datapoint.Metric); len(cached) > 0 || err == nil {
+	if idx.isCached(datapoint.Metric) {
 		idx.stats.Record("index", "cache.hit")
 		// if there is a whole metric in the cache dont even try with a subpath
 		return nil
@@ -60,16 +68,16 @@ func (idx *OpensearchIndex) Index(datapoint *DataPoint) error {
 		metric := strings.Join(segments[:i], ".")
 		isLeaf := i == j
 		// TODO: use mget
-		if cachedSub, err := idx.cache.Get(metric); len(cachedSub) > 0 || err == nil {
+		if idx.isCached(metric) {
 			idx.stats.Record("index", "cache.hit")
 		} else {
 			idx.stats.Record("index", "cache.miss")
 			if !idx.exists(metric) {
-				idx.add(&PathDoc{depth: i, leaf: isLeaf, path: metric})
+				idx.add(PathDoc{depth: i, leaf: isLeaf, path: metric})
 			} else {
 				idx.stats.Record("index", "doc.already_in")
 			}
-			idx.cache.Set(metric, []byte{})
+			idx.cache.Add(metric, 123)
 		}
 	}
 	return nil
@@ -90,7 +98,7 @@ func (idx *OpensearchIndex) Shutdown(ctx context.Context) {
 	idx.bulkIndexer.Close(ctx)
 }
 
-func (idx *OpensearchIndex) add(doc *PathDoc) {
+func (idx *OpensearchIndex) add(doc PathDoc) {
 	jdoc := fmt.Sprintf(`{"depth": %d, "leaf": %t, "path": "%s"}`, doc.depth, doc.leaf, doc.path)
 
 	err := idx.bulkIndexer.Add(
@@ -99,17 +107,6 @@ func (idx *OpensearchIndex) add(doc *PathDoc) {
 			Action:     "index",
 			DocumentID: doc.path,
 			Body:       strings.NewReader(jdoc),
-			OnFailure: func(
-				ctx context.Context,
-				item opensearchutil.BulkIndexerItem,
-				res opensearchutil.BulkIndexerResponseItem, err error,
-			) {
-				if err != nil {
-					log.Error("ERROR: ", err)
-				} else {
-					log.Error("ERROR: ", res.Error.Type, res.Error.Reason)
-				}
-			},
 		},
 	)
 	if err != nil {
@@ -133,11 +130,18 @@ func NewOpenSearch(config *IndexConfig, onFlushEnd func(context.Context)) (*open
 		}
 	}
 
-	if config.Insecure {
-		tlsTransport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
+	tlsTransport = &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: bool(config.Insecure)},
+		Dial: (&net.Dialer{
+			Timeout:   1 * time.Second,
+			KeepAlive: 10 * time.Second,
+		}).Dial,
+		TLSHandshakeTimeout: 5 * time.Second,
+		DisableKeepAlives:   true,
+		MaxIdleConns:        10,
+		IdleConnTimeout:     10 * time.Second,
 	}
+
 	client, err := opensearch.NewClient(opensearch.Config{
 		Addresses: config.Addresses,
 		Signer:    signer,
@@ -146,9 +150,10 @@ func NewOpenSearch(config *IndexConfig, onFlushEnd func(context.Context)) (*open
 		Password:  config.Password,
 
 		// TODO: should be configurable
-		RetryBackoff:  func(i int) time.Duration { return time.Duration(i) * 100 * time.Millisecond },
-		MaxRetries:    1,
-		EnableMetrics: true,
+		RetryBackoff:         func(i int) time.Duration { return time.Duration(i) * 100 * time.Millisecond },
+		MaxRetries:           3,
+		EnableRetryOnTimeout: true,
+		EnableMetrics:        true,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -174,14 +179,7 @@ func NewOpensearchIndex(config *IndexConfig, stats *Stats) (IIndex, error) {
 	var err error
 	oi := &OpensearchIndex{cache: nil, config: config, client: nil, bulkIndexer: nil, stats: stats}
 
-	cacheConfig := bigcache.Config{
-		Shards:           config.Cache.Shards,
-		LifeWindow:       ParseDurationWithFallback(config.Cache.Lifewindow, 10*time.Minute),
-		CleanWindow:      ParseDurationWithFallback(config.Cache.Cleanwindow, 5*time.Minute),
-		MaxEntrySize:     200, // arbitrary, used in init alloc
-		HardMaxCacheSize: config.Cache.Size,
-	}
-	oi.cache, err = bigcache.New(context.Background(), cacheConfig)
+	oi.cache, err = lru.NewARC[string, int64](config.Cache.Size)
 	if err != nil {
 		return nil, err
 	}

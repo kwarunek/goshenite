@@ -32,7 +32,11 @@ func (server *GosheniteServer) OnOpen(c gnet.Conn) (out []byte, action gnet.Acti
 func (server *GosheniteServer) OnTraffic(c gnet.Conn) gnet.Action {
 	buf, _ := c.Next(-1)
 
-	dps, _ := ParsePlainGraphiteProtocol(buf)
+	dps, err := ParsePlainGraphiteProtocol(buf)
+	if err != nil {
+		server.stats.Record("parser.errors", err.Error())
+	}
+
 	for _, dp := range dps {
 		server.bus.Emit(&dp)
 	}
