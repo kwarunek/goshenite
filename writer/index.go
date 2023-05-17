@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/md5"
 	"crypto/tls"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"net/http"
@@ -41,8 +43,15 @@ type PathDoc struct {
 	depth int
 }
 
+func MD5Sum(input string) string {
+	hash := md5.New()
+	hash.Write([]byte(input))
+	hashSum := hash.Sum(nil)
+	return hex.EncodeToString(hashSum)
+}
+
 func (idx *OpensearchIndex) exists(metric string) bool {
-	getter := opensearchapi.GetRequest{Index: idx.config.Name, DocumentID: metric}
+	getter := opensearchapi.GetRequest{Index: idx.config.Name, DocumentID: MD5Sum(metric)}
 	res, err := getter.Do(context.Background(), idx.client)
 	if res.Body != nil {
 		defer res.Body.Close()
@@ -77,7 +86,7 @@ func (idx *OpensearchIndex) Index(datapoint *DataPoint) error {
 			} else {
 				idx.stats.Record("index", "doc.already_in")
 			}
-			idx.cache.Add(metric, 123)
+			idx.cache.Add(metric, 1)
 		}
 	}
 	return nil
@@ -105,7 +114,7 @@ func (idx *OpensearchIndex) add(doc PathDoc) {
 		context.Background(),
 		opensearchutil.BulkIndexerItem{
 			Action:     "index",
-			DocumentID: doc.path,
+			DocumentID: MD5Sum(doc.path),
 			Body:       strings.NewReader(jdoc),
 		},
 	)
