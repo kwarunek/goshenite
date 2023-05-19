@@ -108,7 +108,8 @@ func (idx *OpensearchIndex) Shutdown(ctx context.Context) {
 }
 
 func (idx *OpensearchIndex) add(doc PathDoc) {
-	jdoc := fmt.Sprintf(`{"depth": %d, "leaf": %t, "path": "%s"}`, doc.depth, doc.leaf, doc.path)
+    // set dummy tenant for disthene-compat
+	jdoc := fmt.Sprintf(`{"depth": %d, "tenant": "NONE", "leaf": %t, "path": "%s"}`, doc.depth, doc.leaf, doc.path)
 
 	err := idx.bulkIndexer.Add(
 		context.Background(),
