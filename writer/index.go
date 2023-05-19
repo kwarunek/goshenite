@@ -34,6 +34,7 @@ type OpensearchIndex struct {
 	config      *IndexConfig
 	client      *opensearch.Client
 	bulkIndexer opensearchutil.BulkIndexer
+	lastStats   opensearchutil.BulkIndexerStats
 	stats       *Stats
 }
 
@@ -56,12 +57,16 @@ func (idx *OpensearchIndex) exists(metric string) bool {
 	if res.Body != nil {
 		defer res.Body.Close()
 	}
-	return (err == nil && res.StatusCode == 200)
+	ret := (err == nil && res.StatusCode == 200)
+	if err != nil {
+		idx.stats.Record("index", "check_exits.error")
+	}
+	return ret
 }
 
 func (idx *OpensearchIndex) isCached(metric string) bool {
 	val, ok := idx.cache.Get(metric)
-	return ok && (val == 123)
+	return ok && (val == 1)
 }
 
 func (idx *OpensearchIndex) Index(datapoint *DataPoint) error {
@@ -98,8 +103,11 @@ func (idx *OpensearchIndex) flushEnd(ctx context.Context) {
 	t := v.Type()
 
 	for i := 0; i < v.NumField(); i++ {
-		idx.stats.Record("index", t.Field(i).Name, int64(v.Field(i).Interface().(uint64)))
+		lv := reflect.ValueOf(idx.lastStats).FieldByName(t.Field(i).Name).Uint()
+		idx.stats.Record("index", t.Field(i).Name, int64(v.Field(i).Interface().(uint64))-int64(lv))
 	}
+	idx.lastStats = ws
+	idx.stats.Record("index", "flush")
 	idx.stats.RecordFixed("index", "cache.size", int64(idx.cache.Len()))
 }
 
@@ -108,7 +116,7 @@ func (idx *OpensearchIndex) Shutdown(ctx context.Context) {
 }
 
 func (idx *OpensearchIndex) add(doc PathDoc) {
-    // set dummy tenant for disthene-compat
+	// set dummy tenant for disthene-compat
 	jdoc := fmt.Sprintf(`{"depth": %d, "tenant": "NONE", "leaf": %t, "path": "%s"}`, doc.depth, doc.leaf, doc.path)
 
 	err := idx.bulkIndexer.Add(
@@ -143,13 +151,11 @@ func NewOpenSearch(config *IndexConfig, onFlushEnd func(context.Context)) (*open
 	tlsTransport = &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: bool(config.Insecure)},
 		Dial: (&net.Dialer{
-			Timeout:   1 * time.Second,
+			Timeout:   10 * time.Second,
 			KeepAlive: 10 * time.Second,
 		}).Dial,
 		TLSHandshakeTimeout: 5 * time.Second,
 		DisableKeepAlives:   true,
-		MaxIdleConns:        10,
-		IdleConnTimeout:     10 * time.Second,
 	}
 
 	client, err := opensearch.NewClient(opensearch.Config{
@@ -187,7 +193,14 @@ func NewOpenSearch(config *IndexConfig, onFlushEnd func(context.Context)) (*open
 
 func NewOpensearchIndex(config *IndexConfig, stats *Stats) (IIndex, error) {
 	var err error
-	oi := &OpensearchIndex{cache: nil, config: config, client: nil, bulkIndexer: nil, stats: stats}
+	oi := &OpensearchIndex{
+		cache:       nil,
+		config:      config,
+		client:      nil,
+		bulkIndexer: nil,
+		lastStats:   opensearchutil.BulkIndexerStats{0, 0, 0, 0, 0, 0, 0, 0},
+		stats:       stats,
+	}
 
 	oi.cache, err = lru.NewARC[string, int64](config.Cache.Size)
 	if err != nil {
